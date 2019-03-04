@@ -295,7 +295,9 @@ static NSDictionary *defaultFaceDetectorOptions = nil;
         return;
     }
 
-    device.videoZoomFactor = (device.activeFormat.videoMaxZoomFactor - 1.0) * self.zoom + 1.0;
+    device.videoZoomFactor = MIN(MAX(self.zoom, 1), device.activeFormat.videoMaxZoomFactor);
+
+    // device.videoZoomFactor = (device.activeFormat.videoMaxZoomFactor - 1.0) * self.zoom + 1.0;
 
     [device unlockForConfiguration];
 }
