@@ -1,12 +1,14 @@
 package org.reactnative.camera;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.common.MapBuilder;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.ViewGroupManager;
 import com.facebook.react.uimanager.annotations.ReactProp;
 import com.google.android.cameraview.AspectRatio;
+import com.google.android.cameraview.Size;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +23,11 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     EVENT_ON_BARCODES_DETECTED("onGoogleVisionBarcodesDetected"),
     EVENT_ON_FACE_DETECTION_ERROR("onFaceDetectionError"),
     EVENT_ON_BARCODE_DETECTION_ERROR("onGoogleVisionBarcodeDetectionError"),
-    EVENT_ON_TEXT_RECOGNIZED("onTextRecognized");
+    EVENT_ON_TEXT_RECOGNIZED("onTextRecognized"),
+    EVENT_ON_PICTURE_TAKEN("onPictureTaken"),
+    EVENT_ON_PICTURE_SAVED("onPictureSaved"),
+    EVENT_ON_RECORDING_START("onRecordingStart"),
+    EVENT_ON_RECORDING_END("onRecordingEnd");
 
     private final String mName;
 
@@ -39,7 +45,7 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
 
   @Override
   public void onDropViewInstance(RNCameraView view) {
-    view.stop();
+    view.onHostDestroy();
     super.onDropViewInstance(view);
   }
 
@@ -69,6 +75,11 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     view.setFacing(type);
   }
 
+  @ReactProp(name = "cameraId")
+  public void setCameraId(RNCameraView view, String id) {
+    view.setCameraId(id);
+  }
+
   @ReactProp(name = "ratio")
   public void setRatio(RNCameraView view, String ratio) {
     view.setAspectRatio(AspectRatio.parse(ratio));
@@ -77,6 +88,11 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
   @ReactProp(name = "flashMode")
   public void setFlashMode(RNCameraView view, int torchMode) {
     view.setFlash(torchMode);
+  }
+
+  @ReactProp(name = "exposure")
+  public void setExposureCompensation(RNCameraView view, float exposure){
+    view.setExposureCompensation(exposure);
   }
 
   @ReactProp(name = "autoFocus")
@@ -89,6 +105,15 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     view.setFocusDepth(depth);
   }
 
+  @ReactProp(name = "autoFocusPointOfInterest")
+  public void setAutoFocusPointOfInterest(RNCameraView view, ReadableMap coordinates) {
+    if(coordinates != null){
+      float x = (float) coordinates.getDouble("x");
+      float y = (float) coordinates.getDouble("y");
+      view.setAutoFocusPointOfInterest(x, y);
+    }
+  }
+
   @ReactProp(name = "zoom")
   public void setZoom(RNCameraView view, float zoom) {
     view.setZoom(zoom);
@@ -97,6 +122,16 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
   @ReactProp(name = "whiteBalance")
   public void setWhiteBalance(RNCameraView view, int whiteBalance) {
     view.setWhiteBalance(whiteBalance);
+  }
+
+  @ReactProp(name = "pictureSize")
+  public void setPictureSize(RNCameraView view, String size) {
+    view.setPictureSize(size.equals("None") ? null : Size.parse(size));
+  }
+
+  @ReactProp(name = "playSoundOnCapture")
+  public void setPlaySoundOnCapture(RNCameraView view, boolean playSoundOnCapture) {
+    view.setPlaySoundOnCapture(playSoundOnCapture);
   }
 
   @ReactProp(name = "barCodeTypes")
@@ -121,11 +156,6 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     view.setUsingCamera2Api(useCamera2Api);
   }
 
-  @ReactProp(name = "playSoundOnCapture")
-  public void setPlaySoundOnCapture(RNCameraView view, boolean playSoundOnCapture) {
-    view.setPlaySoundOnCapture(playSoundOnCapture);
-  }
-
   @ReactProp(name = "faceDetectorEnabled")
   public void setFaceDetecting(RNCameraView view, boolean faceDetectorEnabled) {
     view.setShouldDetectFaces(faceDetectorEnabled);
@@ -146,6 +176,11 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     view.setFaceDetectionClassifications(classifications);
   }
 
+  @ReactProp(name = "trackingEnabled")
+  public void setTracking(RNCameraView view, boolean trackingEnabled) {
+    view.setTracking(trackingEnabled);
+  }
+
   @ReactProp(name = "googleVisionBarcodeDetectorEnabled")
   public void setGoogleVisionBarcodeDetecting(RNCameraView view, boolean googleBarcodeDetectorEnabled) {
     view.setShouldGoogleDetectBarcodes(googleBarcodeDetectorEnabled);
@@ -156,8 +191,35 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
     view.setGoogleVisionBarcodeType(barcodeType);
   }
 
+  @ReactProp(name = "googleVisionBarcodeMode")
+  public void setGoogleVisionBarcodeMode(RNCameraView view, int barcodeMode) {
+    view.setGoogleVisionBarcodeMode(barcodeMode);
+  }
+
   @ReactProp(name = "textRecognizerEnabled")
   public void setTextRecognizing(RNCameraView view, boolean textRecognizerEnabled) {
     view.setShouldRecognizeText(textRecognizerEnabled);
   }
+
+  /**---limit scan area addition---**/
+  @ReactProp(name = "rectOfInterest")
+  public void setRectOfInterest(RNCameraView view, ReadableMap coordinates) {
+    if(coordinates != null){
+      float x = (float) coordinates.getDouble("x");
+      float y = (float) coordinates.getDouble("y");
+      float width = (float) coordinates.getDouble("width");
+      float height = (float) coordinates.getDouble("height");
+      view.setRectOfInterest(x, y, width, height);
+    }
+  }
+
+  @ReactProp(name = "cameraViewDimensions")
+  public void setCameraViewDimensions(RNCameraView view, ReadableMap dimensions) {
+    if(dimensions != null){
+      int cameraViewWidth = (int) dimensions.getDouble("width");
+      int cameraViewHeight = (int) dimensions.getDouble("height");
+      view.setCameraViewDimensions(cameraViewWidth, cameraViewHeight);
+    }
+  }
+  /**---limit scan area addition---**/
 }
