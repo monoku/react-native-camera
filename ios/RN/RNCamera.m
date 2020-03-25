@@ -582,15 +582,17 @@ BOOL _sessionInterrupted = NO;
         return;
     }
 
-    float maxZoom;
-    if(self.maxZoom > 1){
-        maxZoom = MIN(self.maxZoom, device.activeFormat.videoMaxZoomFactor);
-    }
-    else{
-        maxZoom = device.activeFormat.videoMaxZoomFactor;
-    }
+    device.videoZoomFactor = MIN(MAX(self.zoom, 1), device.activeFormat.videoMaxZoomFactor);
 
-    device.videoZoomFactor = (maxZoom - 1) * self.zoom + 1;
+    // float maxZoom;
+    // if(self.maxZoom > 1){
+    //     maxZoom = MIN(self.maxZoom, device.activeFormat.videoMaxZoomFactor);
+    // }
+    // else{
+    //     maxZoom = device.activeFormat.videoMaxZoomFactor;
+    // }
+
+    // device.videoZoomFactor = (maxZoom - 1) * self.zoom + 1;
 
 
     [device unlockForConfiguration];
