@@ -298,10 +298,6 @@ RCT_CUSTOM_VIEW_PROPERTY(mirrorImage, BOOL, RCTCamera) {
   self.mirrorImage = [RCTConvert BOOL:json];
 }
 
-RCT_CUSTOM_VIEW_PROPERTY(mirrorVideo, BOOL, RCTCamera) {
-    self.mirrorVideo = [RCTConvert BOOL:json];
-}
-
 RCT_CUSTOM_VIEW_PROPERTY(cropToPreview, BOOL, RCTCamera) {
     self.cropToPreview = [RCTConvert BOOL:json];
 }
@@ -329,7 +325,6 @@ RCT_CUSTOM_VIEW_PROPERTY(captureAudio, BOOL, RCTCamera) {
 - (id)init {
   if ((self = [super init])) {
     self.mirrorImage = false;
-    self.mirrorVideo = false;
 
     self.sessionQueue = dispatch_queue_create("cameraManagerQueue", DISPATCH_QUEUE_SERIAL);
 
@@ -850,10 +845,7 @@ RCT_EXPORT_METHOD(setZoom:(CGFloat)zoomFactor) {
 
   dispatch_async(self.sessionQueue, ^{
     [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:orientation];
-    
-    if (self.mirrorVideo) {
-        [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoMirrored:YES];
-    }
+
     //Create temporary URL to record to
     NSString *outputPath = [[NSString alloc] initWithFormat:@"%@%@", NSTemporaryDirectory(), @"output.mov"];
     NSURL *outputURL = [[NSURL alloc] initFileURLWithPath:outputPath];
@@ -979,7 +971,7 @@ didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL
 
   for (AVMetadataMachineReadableCodeObject *metadata in metadataObjects) {
     for (id barcodeType in self.barCodeTypes) {
-      if ([metadata.type isEqualToString:barcodeType] && metadata.stringValue) {
+      if ([metadata.type isEqualToString:barcodeType]) {
         // Transform the meta-data coordinates to screen coords
         AVMetadataMachineReadableCodeObject *transformed = (AVMetadataMachineReadableCodeObject *)[_previewLayer transformedMetadataObjectForMetadataObject:metadata];
 

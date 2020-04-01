@@ -1,34 +1,57 @@
 package org.reactnative.camera.events;
 
-import androidx.core.util.Pools;
+import android.support.v4.util.Pools;
+import android.util.SparseArray;
 
 import org.reactnative.camera.CameraViewManager;
+import org.reactnative.camera.utils.ImageDimensions;
+import org.reactnative.facedetector.FaceDetectorUtils;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.uimanager.events.Event;
 import com.facebook.react.uimanager.events.RCTEventEmitter;
+import com.google.android.cameraview.CameraView;
+import com.google.android.gms.vision.face.Face;
 
 public class FacesDetectedEvent extends Event<FacesDetectedEvent> {
   private static final Pools.SynchronizedPool<FacesDetectedEvent> EVENTS_POOL =
       new Pools.SynchronizedPool<>(3);
 
-  private WritableArray mData;
+  private double mScaleX;
+  private double mScaleY;
+  private SparseArray<Face> mFaces;
+  private ImageDimensions mImageDimensions;
 
   private FacesDetectedEvent() {}
 
-  public static FacesDetectedEvent obtain(int viewTag, WritableArray data) {
+  public static FacesDetectedEvent obtain(
+      int viewTag,
+      SparseArray<Face> faces,
+      ImageDimensions dimensions,
+      double scaleX,
+      double scaleY
+  ) {
     FacesDetectedEvent event = EVENTS_POOL.acquire();
     if (event == null) {
       event = new FacesDetectedEvent();
     }
-    event.init(viewTag, data);
+    event.init(viewTag, faces, dimensions, scaleX, scaleY);
     return event;
   }
 
-  private void init(int viewTag, WritableArray data) {
+  private void init(
+      int viewTag,
+      SparseArray<Face> faces,
+      ImageDimensions dimensions,
+      double scaleX,
+      double scaleY
+  ) {
     super.init(viewTag);
-    mData = data;
+    mFaces = faces;
+    mImageDimensions = dimensions;
+    mScaleX = scaleX;
+    mScaleY = scaleY;
   }
 
   /**
@@ -38,11 +61,11 @@ public class FacesDetectedEvent extends Event<FacesDetectedEvent> {
    */
   @Override
   public short getCoalescingKey() {
-    if (mData.size() > Short.MAX_VALUE) {
+    if (mFaces.size() > Short.MAX_VALUE) {
       return Short.MAX_VALUE;
     }
 
-    return (short) mData.size();
+    return (short) mFaces.size();
   }
 
   @Override
@@ -56,9 +79,22 @@ public class FacesDetectedEvent extends Event<FacesDetectedEvent> {
   }
 
   private WritableMap serializeEventData() {
+    WritableArray facesList = Arguments.createArray();
+
+    for(int i = 0; i < mFaces.size(); i++) {
+      Face face = mFaces.valueAt(i);
+      WritableMap serializedFace = FaceDetectorUtils.serializeFace(face, mScaleX, mScaleY);
+      if (mImageDimensions.getFacing() == CameraView.FACING_FRONT) {
+        serializedFace = FaceDetectorUtils.rotateFaceX(serializedFace, mImageDimensions.getWidth(), mScaleX);
+      } else {
+        serializedFace = FaceDetectorUtils.changeAnglesDirection(serializedFace);
+      }
+      facesList.pushMap(serializedFace);
+    }
+
     WritableMap event = Arguments.createMap();
     event.putString("type", "face");
-    event.putArray("faces", mData);
+    event.putArray("faces", facesList);
     event.putInt("target", getViewTag());
     return event;
   }

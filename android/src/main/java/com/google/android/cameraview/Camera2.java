@@ -26,41 +26,28 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
-import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
-import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.CamcorderProfile;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
-import android.media.MediaActionSound;
-import androidx.annotation.NonNull;
+import android.support.annotation.NonNull;
 import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.os.Handler;
 import android.os.Looper;
 
-import com.facebook.react.bridge.ReadableMap;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
-
-import org.reactnative.camera.utils.ObjectUtils;
-
-
 
 @SuppressWarnings("MissingPermission")
 @TargetApi(21)
@@ -84,10 +71,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
-
-    private static final int FOCUS_AREA_SIZE_DEFAULT = 300;
-
-    private static final int FOCUS_METERING_AREA_WEIGHT_DEFAULT = 1000;
 
     private final CameraManager mCameraManager;
 
@@ -193,8 +176,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                     byte[] data = new byte[buffer.remaining()];
                     buffer.get(data);
                     if (image.getFormat() == ImageFormat.JPEG) {
-                        // @TODO: implement deviceOrientation
-                        mCallback.onPictureTaken(data, 0);
+                        mCallback.onPictureTaken(data);
                     } else {
                         mCallback.onFramePreview(data, image.getWidth(), image.getHeight(), mDisplayOrientation);
                     }
@@ -207,13 +189,10 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
 
     private String mCameraId;
-    private String _mCameraId;
 
     private CameraCharacteristics mCameraCharacteristics;
 
     CameraDevice mCamera;
-
-    MediaActionSound sound = new MediaActionSound();
 
     CameraCaptureSession mCaptureSession;
 
@@ -237,8 +216,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     private final SizeMap mPictureSizes = new SizeMap();
 
-    private Size mPictureSize;
-
     private int mFacing;
 
     private AspectRatio mAspectRatio = Constants.DEFAULT_ASPECT_RATIO;
@@ -249,13 +226,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     private int mFlash;
 
-    private float mExposure;
-
-    private int mCameraOrientation;
-
     private int mDisplayOrientation;
-
-    private int mDeviceOrientation;
 
     private float mFocusDepth;
 
@@ -265,14 +236,12 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     private boolean mIsScanning;
 
-    private Boolean mPlaySoundOnCapture = false;
-
     private Surface mPreviewSurface;
 
     private Rect mInitialCropRegion;
 
-    Camera2(Callback callback, PreviewImpl preview, Context context, Handler bgHandler) {
-        super(callback, preview, bgHandler);
+    Camera2(Callback callback, PreviewImpl preview, Context context) {
+        super(callback, preview);
         mCameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         mCameraManager.registerAvailabilityCallback(new CameraManager.AvailabilityCallback() {
             @Override
@@ -305,7 +274,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     boolean start() {
         if (!chooseCameraIdByFacing()) {
             mAspectRatio = mInitialRatio;
-            mCallback.onMountError();
             return false;
         }
         collectCameraInfo();
@@ -344,10 +312,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             mMediaRecorder = null;
 
             if (mIsRecording) {
-                mCallback.onRecordingEnd();
-
-                // @TODO: implement videoOrientation and deviceOrientation calculation
-                mCallback.onVideoRecorded(mVideoPath, 0, 0);
+                mCallback.onVideoRecorded(mVideoPath);
                 mIsRecording = false;
             }
         }
@@ -376,91 +341,8 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    void setCameraId(String id) {
-        if(!ObjectUtils.equals(_mCameraId, id)){
-            _mCameraId = id;
-
-            // only update if our camera ID actually changes
-            // from what we currently have.
-            // Passing null will always yield true
-            if(!ObjectUtils.equals(_mCameraId, mCameraId)){
-                // this will call chooseCameraIdByFacing
-                if (isCameraOpened()) {
-                    stop();
-                    start();
-                }
-            }
-        }
-    }
-
-    @Override
-    String getCameraId() {
-        return _mCameraId;
-    }
-
-    @Override
     Set<AspectRatio> getSupportedAspectRatios() {
         return mPreviewSizes.ratios();
-    }
-
-    @Override
-    List<Properties> getCameraIds() {
-        try{
-
-            List<Properties> ids = new ArrayList<>();
-
-            String[] cameraIds = mCameraManager.getCameraIdList();
-            for (String id : cameraIds) {
-                Properties p = new Properties();
-
-                CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(id);
-                Integer internal = characteristics.get(CameraCharacteristics.LENS_FACING);
-
-                p.put("id", id);
-                p.put("type", String.valueOf(internal == CameraCharacteristics.LENS_FACING_FRONT ? Constants.FACING_FRONT : Constants.FACING_BACK));
-                ids.add(p);
-            }
-            return ids;
-        }
-        catch (CameraAccessException e) {
-            throw new RuntimeException("Failed to get a list of camera ids", e);
-        }
-    }
-
-    @Override
-    SortedSet<Size> getAvailablePictureSizes(AspectRatio ratio) {
-        return mPictureSizes.sizes(ratio);
-    }
-
-    @Override
-    void setPictureSize(Size size) {
-        if (mCaptureSession != null) {
-            try {
-                mCaptureSession.stopRepeating();
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
-            }
-            mCaptureSession.close();
-            mCaptureSession = null;
-        }
-        if (mStillImageReader != null) {
-            mStillImageReader.close();
-        }
-        if (size == null) {
-          if (mAspectRatio == null || mPictureSize == null) {
-            return;
-          }
-          mPictureSizes.sizes(mAspectRatio).last();
-        } else {
-          mPictureSize = size;
-        }
-        prepareStillImageReader();
-        startCaptureSession();
-    }
-
-    @Override
-    Size getPictureSize() {
-        return mPictureSize;
     }
 
     @Override
@@ -540,20 +422,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    float getExposureCompensation() {
-        return mExposure;
-    }
-
-    @Override
-    void setExposureCompensation(float exposure) {
-        Log.e("CAMERA_2:: ", "Adjusting exposure is not currently supported for Camera2");
-    }
-
-
-    @Override
-    void takePicture(ReadableMap options) {
-        mCaptureCallback.setOptions(options);
-
+    void takePicture() {
         if (mAutoFocus) {
             lockFocus();
         } else {
@@ -562,7 +431,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    boolean record(String path, int maxDuration, int maxFileSize, boolean recordAudio, CamcorderProfile profile, int orientation) {
+    boolean record(String path, int maxDuration, int maxFileSize, boolean recordAudio, CamcorderProfile profile) {
         if (!mIsRecording) {
             setUpMediaRecorder(path, maxDuration, maxFileSize, recordAudio, profile);
             try {
@@ -585,11 +454,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                     mSessionCallback, null);
                 mMediaRecorder.start();
                 mIsRecording = true;
-
-                // @TODO: implement videoOrientation and deviceOrientation calculation
-                // same TODO as onVideoRecorded
-                mCallback.onRecordingStart(mVideoPath, 0, 0);
-
                 return true;
             } catch (CameraAccessException | IOException e) {
                 e.printStackTrace();
@@ -682,16 +546,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    void setPlaySoundOnCapture(boolean playSoundOnCapture) {
-        mPlaySoundOnCapture = playSoundOnCapture;
-    }
-
-    @Override
-    public boolean getPlaySoundOnCapture(){
-        return mPlaySoundOnCapture;
-    }
-
-    @Override
     void setScanning(boolean isScanning) {
         if (mIsScanning == isScanning) {
             return;
@@ -715,48 +569,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    int getCameraOrientation() {
-        return mCameraOrientation;
-    }
-
-    @Override
     void setDisplayOrientation(int displayOrientation) {
         mDisplayOrientation = displayOrientation;
         mPreview.setDisplayOrientation(mDisplayOrientation);
-    }
-
-
-    @Override
-    void setDeviceOrientation(int deviceOrientation) {
-        mDeviceOrientation = deviceOrientation;
-        //mPreview.setDisplayOrientation(deviceOrientation); // this is not needed and messes up the display orientation
-    }
-
-
-    // This is a helper method to query Camera2 legacy status so we don't need
-    // to instantiate and set all its props in order to check if it is legacy or not
-    // and then fallback to Camera1. This way, legacy devices can fall back to Camera1 right away
-    // This method makes sure all cameras are not legacy, so further checks are not needed.
-    public static boolean isLegacy(Context context){
-        try{
-            CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-            String[] ids = manager.getCameraIdList();
-            for (String id : ids) {
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
-                Integer level = characteristics.get(
-                        CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
-                if (level == null ||
-                        level == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY) {
-                    Log.w(TAG, "Camera2 can only run in legacy mode and should not be used.");
-                    return true;
-                }
-            }
-            return false;
-        }
-        catch(CameraAccessException ex){
-            Log.e(TAG, "Failed to check camera legacy status, returning true.", ex);
-            return true;
-        }
     }
 
     /**
@@ -765,86 +580,62 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * {@link #mFacing}.</p>
      */
     private boolean chooseCameraIdByFacing() {
-        if(_mCameraId == null){
-            try {
-                int internalFacing = INTERNAL_FACINGS.get(mFacing);
-                final String[] ids = mCameraManager.getCameraIdList();
-                if (ids.length == 0) { // No camera
-                    Log.e(TAG, "No cameras available.");
-                    return false;
+        try {
+            int internalFacing = INTERNAL_FACINGS.get(mFacing);
+            final String[] ids = mCameraManager.getCameraIdList();
+            if (ids.length == 0) { // No camera
+                throw new RuntimeException("No camera available.");
+            }
+            for (String id : ids) {
+                CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(id);
+                Integer level = characteristics.get(
+                        CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+                if (level == null ||
+                        level == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY) {
+                    continue;
                 }
-                for (String id : ids) {
-                    CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(id);
-
-                    Integer internal = characteristics.get(CameraCharacteristics.LENS_FACING);
-                    if (internal == null) {
-                        Log.e(TAG, "Unexpected state: LENS_FACING null");
-                        continue;
-                    }
-                    if (internal == internalFacing) {
-                        mCameraId = id;
-                        mCameraCharacteristics = characteristics;
-                        return true;
-                    }
-                }
-                // Not found
-                mCameraId = ids[0];
-                mCameraCharacteristics = mCameraManager.getCameraCharacteristics(mCameraId);
-
-                Integer internal = mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING);
+                Integer internal = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (internal == null) {
-                    Log.e(TAG, "Unexpected state: LENS_FACING null");
-                    return false;
+                    throw new NullPointerException("Unexpected state: LENS_FACING null");
                 }
-                for (int i = 0, count = INTERNAL_FACINGS.size(); i < count; i++) {
-                    if (INTERNAL_FACINGS.valueAt(i) == internal) {
-                        mFacing = INTERNAL_FACINGS.keyAt(i);
-                        return true;
-                    }
+                if (internal == internalFacing) {
+                    mCameraId = id;
+                    mCameraCharacteristics = characteristics;
+                    return true;
                 }
-                // The operation can reach here when the only camera device is an external one.
-                // We treat it as facing back.
-                mFacing = Constants.FACING_BACK;
-                return true;
-            } catch (CameraAccessException e) {
-                Log.e(TAG, "Failed to get a list of camera devices", e);
+            }
+            // Not found
+            mCameraId = ids[0];
+            mCameraCharacteristics = mCameraManager.getCameraCharacteristics(mCameraId);
+            Integer level = mCameraCharacteristics.get(
+                    CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+            if (level == null ||
+                    level == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY) {
                 return false;
             }
-        }
-        else{
-
-            try{
-                // need to set the mCameraCharacteristics variable as above and also do the same checks
-                // for legacy hardware
-                mCameraCharacteristics = mCameraManager.getCameraCharacteristics(_mCameraId);
-
-                // set our facing variable so orientation also works as expected
-                Integer internal = mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING);
-                if (internal == null) {
-                    Log.e(TAG, "Unexpected state: LENS_FACING null");
-                    return false;
-                }
-                for (int i = 0, count = INTERNAL_FACINGS.size(); i < count; i++) {
-                    if (INTERNAL_FACINGS.valueAt(i) == internal) {
-                        mFacing = INTERNAL_FACINGS.keyAt(i);
-                        break;
-                    }
-                }
-
-                mCameraId = _mCameraId;
-                return true;
+            Integer internal = mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING);
+            if (internal == null) {
+                throw new NullPointerException("Unexpected state: LENS_FACING null");
             }
-            catch(Exception e){
-                Log.e(TAG, "Failed to get camera characteristics", e);
-                return false;
+            for (int i = 0, count = INTERNAL_FACINGS.size(); i < count; i++) {
+                if (INTERNAL_FACINGS.valueAt(i) == internal) {
+                    mFacing = INTERNAL_FACINGS.keyAt(i);
+                    return true;
+                }
             }
+            // The operation can reach here when the only camera device is an external one.
+            // We treat it as facing back.
+            mFacing = Constants.FACING_BACK;
+            return true;
+        } catch (CameraAccessException e) {
+            throw new RuntimeException("Failed to get a list of camera devices", e);
         }
     }
 
     /**
      * <p>Collects some information from {@link #mCameraCharacteristics}.</p>
-     * <p>This rewrites {@link #mPreviewSizes}, {@link #mPictureSizes},
-     * {@link #mCameraOrientation}, and optionally, {@link #mAspectRatio}.</p>
+     * <p>This rewrites {@link #mPreviewSizes}, {@link #mPictureSizes}, and optionally,
+     * {@link #mAspectRatio}.</p>
      */
     private void collectCameraInfo() {
         StreamConfigurationMap map = mCameraCharacteristics.get(
@@ -862,9 +653,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
         mPictureSizes.clear();
         collectPictureSizes(mPictureSizes, map);
-        if (mPictureSize == null) {
-            mPictureSize = mPictureSizes.sizes(mAspectRatio).last();
-        }
         for (AspectRatio ratio : mPreviewSizes.ratios()) {
             if (!mPictureSizes.ratios().contains(ratio)) {
                 mPreviewSizes.remove(ratio);
@@ -874,8 +662,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         if (!mPreviewSizes.ratios().contains(mAspectRatio)) {
             mAspectRatio = mPreviewSizes.ratios().iterator().next();
         }
-
-        mCameraOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
     }
 
     protected void collectPictureSizes(SizeMap sizes, StreamConfigurationMap map) {
@@ -888,7 +674,8 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         if (mStillImageReader != null) {
             mStillImageReader.close();
         }
-        mStillImageReader = ImageReader.newInstance(mPictureSize.getWidth(), mPictureSize.getHeight(),
+        Size largest = mPictureSizes.sizes(mAspectRatio).last();
+        mStillImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
                 ImageFormat.JPEG, 1);
         mStillImageReader.setOnImageAvailableListener(mOnImageAvailableListener, null);
     }
@@ -937,22 +724,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             mCamera.createCaptureSession(Arrays.asList(surface, mStillImageReader.getSurface(),
                     mScanImageReader.getSurface()), mSessionCallback, null);
         } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to start capture session", e);
             mCallback.onMountError();
-        }
-    }
-
-    @Override
-    public void resumePreview() {
-        unlockFocus();
-    }
-
-    @Override
-    public void pausePreview() {
-        try {
-            mCaptureSession.stopRepeating();
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
         }
     }
 
@@ -1173,89 +945,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
     }
 
-
-    /**
-     * Auto focus on input coordinates
-     */
-
-    // Much credit - https://gist.github.com/royshil/8c760c2485257c85a11cafd958548482
-    void setFocusArea(float x, float y) {
-        if (mCaptureSession == null) {
-            return;
-        }
-        CameraCaptureSession.CaptureCallback captureCallbackHandler = new CameraCaptureSession.CaptureCallback() {
-            @Override
-            public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-                super.onCaptureCompleted(session, request, result);
-
-                if (request.getTag() == "FOCUS_TAG") {
-                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, null);
-                    try {
-                        mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), null, null);
-                    } catch (CameraAccessException e) {
-                        Log.e(TAG, "Failed to manual focus.", e);
-                    }
-                }
-            }
-
-            @Override
-            public void onCaptureFailed(CameraCaptureSession session, CaptureRequest request, CaptureFailure failure) {
-                super.onCaptureFailed(session, request, failure);
-                Log.e(TAG, "Manual AF failure: " + failure);
-            }
-        };
-
-        try {
-            mCaptureSession.stopRepeating();
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to manual focus.", e);
-        }
-
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-        try {
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), captureCallbackHandler, null);
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to manual focus.", e);
-        }
-
-        if (isMeteringAreaAFSupported()) {
-            MeteringRectangle focusAreaTouch = calculateFocusArea(x, y);
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{focusAreaTouch});
-        }
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
-        mPreviewRequestBuilder.setTag("FOCUS_TAG");
-
-        try {
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), captureCallbackHandler, null);
-        } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to manual focus.", e);
-        }
-    }
-
-    private boolean isMeteringAreaAFSupported() {
-        return mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) >= 1;
-    }
-
-    private MeteringRectangle calculateFocusArea(float x, float y) {
-        final Rect sensorArraySize = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-
-        // Current iOS spec has a requirement on sensor orientation that doesn't change, spec followed here.
-        final int xCoordinate = (int)(y  * (float)sensorArraySize.height());
-        final int yCoordinate = (int)(x * (float)sensorArraySize.width());
-        final int halfTouchWidth  = 150;  //TODO: this doesn't represent actual touch size in pixel. Values range in [3, 10]...
-        final int halfTouchHeight = 150;
-        MeteringRectangle focusAreaTouch = new MeteringRectangle(Math.max(yCoordinate - halfTouchWidth,  0),
-                                                                Math.max(xCoordinate - halfTouchHeight, 0),
-                                                                halfTouchWidth  * 2,
-                                                                halfTouchHeight * 2,
-                                                                MeteringRectangle.METERING_WEIGHT_MAX - 1);
-
-        return focusAreaTouch;
-    }
-
     /**
      * Captures a still picture.
      */
@@ -1297,13 +986,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                     break;
             }
             captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOutputRotation());
-
-
-            if(mCaptureCallback.getOptions().hasKey("quality")){
-                int quality = (int) (mCaptureCallback.getOptions().getDouble("quality") * 100);
-                captureRequestBuilder.set(CaptureRequest.JPEG_QUALITY, (byte)quality);
-            }
-
             captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mPreviewRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION));
             // Stop preview and capture a still picture.
             mCaptureSession.stopRepeating();
@@ -1313,13 +995,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                         public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                 @NonNull CaptureRequest request,
                                 @NonNull TotalCaptureResult result) {
-                            if (mCaptureCallback.getOptions().hasKey("pauseAfterCapture")
-                              && !mCaptureCallback.getOptions().getBoolean("pauseAfterCapture")) {
-                                unlockFocus();
-                            }
-                            if (mPlaySoundOnCapture) {
-                                sound.play(MediaActionSound.SHUTTER_CLICK);
-                            }
+                            unlockFocus();
                         }
                     }, null);
         } catch (CameraAccessException e) {
@@ -1330,25 +1006,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     private int getOutputRotation() {
         @SuppressWarnings("ConstantConditions")
         int sensorOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-
-        // updated and copied from Camera1
-        if (mFacing == Constants.FACING_BACK) {
-           return (sensorOrientation + mDeviceOrientation) % 360;
-        } else {
-            final int landscapeFlip = isLandscape(mDeviceOrientation) ? 180 : 0;
-            return (sensorOrientation + mDeviceOrientation + landscapeFlip) % 360;
-        }
-    }
-
-    /**
-     * Test if the supplied orientation is in landscape.
-     *
-     * @param orientationDegrees Orientation in degrees (0,90,180,270)
-     * @return True if in landscape, false if portrait
-     */
-    private boolean isLandscape(int orientationDegrees) {
-        return (orientationDegrees == Constants.LANDSCAPE_90 ||
-                orientationDegrees == Constants.LANDSCAPE_270);
+        return (sensorOrientation +
+                mDisplayOrientation * (mFacing == Constants.FACING_FRONT ? 1 : -1) +
+                360) % 360;
     }
 
     private void setUpMediaRecorder(String path, int maxDuration, int maxFileSize, boolean recordAudio, CamcorderProfile profile) {
@@ -1362,12 +1022,11 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         mMediaRecorder.setOutputFile(path);
         mVideoPath = path;
 
-        CamcorderProfile camProfile = profile;
-        if (!CamcorderProfile.hasProfile(Integer.parseInt(mCameraId), profile.quality)) {
-            camProfile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+        if (CamcorderProfile.hasProfile(Integer.parseInt(mCameraId), profile.quality)) {
+            setCamcorderProfile(profile, recordAudio);
+        } else {
+            setCamcorderProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH), recordAudio);
         }
-        camProfile.videoBitRate = profile.videoBitRate;
-        setCamcorderProfile(camProfile, recordAudio);
 
         mMediaRecorder.setOrientationHint(getOutputRotation());
 
@@ -1409,15 +1068,11 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         mMediaRecorder.release();
         mMediaRecorder = null;
 
-        mCallback.onRecordingEnd();
-
         if (mVideoPath == null || !new File(mVideoPath).exists()) {
-            // @TODO: implement videoOrientation and deviceOrientation calculation
-            mCallback.onVideoRecorded(null, 0 , 0);
+            mCallback.onVideoRecorded(null);
             return;
         }
-        // @TODO: implement videoOrientation and deviceOrientation calculation
-        mCallback.onVideoRecorded(mVideoPath, 0, 0);
+        mCallback.onVideoRecorded(mVideoPath);
         mVideoPath = null;
     }
 
@@ -1478,7 +1133,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         static final int STATE_CAPTURING = 5;
 
         private int mState;
-        private ReadableMap mOptions = null;
 
         PictureCaptureCallback() {
         }
@@ -1486,10 +1140,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         void setState(int state) {
             mState = state;
         }
-
-        void setOptions(ReadableMap options) { mOptions = options; }
-
-        ReadableMap getOptions() { return mOptions; }
 
         @Override
         public void onCaptureProgressed(@NonNull CameraCaptureSession session,

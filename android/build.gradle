@@ -1,73 +1,47 @@
-def safeExtGet(prop, fallback) {
-    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
-}
-
 buildscript {
-  // The Android Gradle plugin is only required when opening the android folder stand-alone.
-  // This avoids unnecessary downloads and potential conflicts when the library is included as a
-  // module dependency in an application project.
-  if (project == rootProject) {
-    repositories {
-      google()
-      jcenter()
+  repositories {
+    jcenter()
+    google()
+    maven {
+      url 'https://maven.google.com'
     }
+  }
 
-    dependencies {
-      //noinspection GradleDependency
-      classpath("com.android.tools.build:gradle:3.5.2")
-    }
+  dependencies {
+    classpath 'com.android.tools.build:gradle:3.0.0'
   }
 }
 
 apply plugin: 'com.android.library'
 
+def DEFAULT_COMPILE_SDK_VERSION             = 26
+def DEFAULT_BUILD_TOOLS_VERSION             = "26.0.2"
+def DEFAULT_TARGET_SDK_VERSION              = 26
+def DEFAULT_GOOGLE_PLAY_SERVICES_VERSION    = "12.0.1"
+def DEFAULT_SUPPORT_LIBRARY_VERSION         = "27.1.0"
+
 android {
-  compileSdkVersion safeExtGet('compileSdkVersion', 28)
-  buildToolsVersion safeExtGet('buildToolsVersion', '28.0.3')
+  compileSdkVersion rootProject.hasProperty('compileSdkVersion') ? rootProject.compileSdkVersion : DEFAULT_COMPILE_SDK_VERSION
+  buildToolsVersion rootProject.hasProperty('buildToolsVersion') ? rootProject.buildToolsVersion : DEFAULT_BUILD_TOOLS_VERSION
 
   defaultConfig {
-    minSdkVersion safeExtGet('minSdkVersion', 16)
-    targetSdkVersion safeExtGet('targetSdkVersion', 28)
+    minSdkVersion 16
+    targetSdkVersion rootProject.hasProperty('targetSdkVersion') ? rootProject.targetSdkVersion : DEFAULT_TARGET_SDK_VERSION
+
+    versionCode 1
+    versionName "1.0.0"
   }
-
-  flavorDimensions "react-native-camera"
-
-  productFlavors {
-    general {
-      dimension "react-native-camera"
-    }
-    mlkit {
-      dimension "react-native-camera"
-    }
-  }
-
-  sourceSets {
-    main {
-      java.srcDirs = ['src/main/java']
-    }
-    general {
-      java.srcDirs = ['src/general/java']
-    }
-    mlkit {
-      java.srcDirs = ['src/mlkit/java']
-    }
-  }
-
   lintOptions {
     abortOnError false
     warning 'InvalidPackage'
   }
-
-  packagingOptions {
-    exclude 'META-INF/androidx.exifinterface_exifinterface.version'
-    exclude 'META-INF/proguard/androidx-annotations.pro'
-  }
 }
 
 repositories {
-  google()
-  jcenter()
   mavenCentral()
+  maven {
+   url 'https://maven.google.com'
+  }
   maven { url "https://jitpack.io" }
   maven {
     // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
@@ -76,15 +50,15 @@ repositories {
 }
 
 dependencies {
-  def googlePlayServicesVisionVersion = safeExtGet('googlePlayServicesVisionVersion', safeExtGet('googlePlayServicesVersion', '17.0.2'))
+  def googlePlayServicesVersion = rootProject.hasProperty('googlePlayServicesVersion')  ? rootProject.googlePlayServicesVersion : DEFAULT_GOOGLE_PLAY_SERVICES_VERSION
+  def supportLibVersion = rootProject.hasProperty('supportLibVersion')  ? rootProject.supportLibVersion : DEFAULT_SUPPORT_LIBRARY_VERSION
 
-  implementation 'com.facebook.react:react-native:+'
-  implementation "com.google.zxing:core:3.3.3"
-  implementation "com.drewnoakes:metadata-extractor:2.11.0"
-  generalImplementation "com.google.android.gms:play-services-vision:$googlePlayServicesVisionVersion"
-  implementation "androidx.exifinterface:exifinterface:1.0.0"
-  implementation "androidx.annotation:annotation:1.0.0"
-  implementation "androidx.legacy:legacy-support-v4:1.0.0"
-  mlkitImplementation "com.google.firebase:firebase-ml-vision:${safeExtGet('firebase-ml-vision', '19.0.3')}"
-  mlkitImplementation "com.google.firebase:firebase-ml-vision-face-model:${safeExtGet('firebase-ml-vision-face-model', '17.0.2')}"
+  compileOnly 'com.facebook.react:react-native:+'
+  compileOnly 'com.facebook.infer.annotation:infer-annotation:+'
+  implementation "com.google.zxing:core:3.2.1"
+  implementation "com.drewnoakes:metadata-extractor:2.9.1"
+  implementation "com.google.android.gms:play-services-vision:$googlePlayServicesVersion"
+  implementation "com.android.support:exifinterface:$supportLibVersion"
+  implementation "com.android.support:support-annotations:$supportLibVersion"
+  implementation "com.android.support:support-v4:$supportLibVersion"
 }

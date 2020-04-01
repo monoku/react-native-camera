@@ -434,7 +434,7 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
         switch (mRecordingOptions.getInt("target")) {
             case RCT_CAMERA_CAPTURE_TARGET_MEMORY:
                 byte[] encoded = convertFileToByteArray(mVideoFile);
-                response.putString("data", new String(encoded, Base64.NO_WRAP));
+                response.putString("data", new String(encoded, Base64.DEFAULT));
                 mRecordingPromise.resolve(response);
                 f.delete();
                 break;
@@ -734,12 +734,7 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
         if (parameters.isZoomSupported()) {
             if (zoom >=0 && zoom < maxZoom) {
                 parameters.setZoom(zoom);
-                try{
-                  camera.setParameters(parameters);
-                }
-                catch(RuntimeException e ) {
-                  Log.e("RCTCameraModule", "setParameters failed", e);
-                }
+                camera.setParameters(parameters);
             }
         }
     }
@@ -823,7 +818,7 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
      */
     @Override
     public void onHostResume() {
-        mSafeToCapture = true;
+        // ... do nothing
     }
 
     @Override

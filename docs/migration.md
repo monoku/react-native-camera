@@ -1,8 +1,4 @@
----
-id: migration
-title: Migrating from RCTCamera to RNCamera
-sidebar_label: Migrating from RCTCamera to RNCamera
----
+# Migrating from RCTCamera to RNCamera
 
 ## Project Integration
 
@@ -20,10 +16,10 @@ You can do it via `react-native link` command or by the manual steps.
 
 Before building and running again, do a complete clean on your project.
 
+
 ### Android
 
 1. On the MainApplication of your Android project change the import of RCTCameraPackage line to:
-
 ```java
 import org.reactnative.camera.RNCameraPackage;
 ```
@@ -31,7 +27,6 @@ import org.reactnative.camera.RNCameraPackage;
 2. Inside the getPackages() methods change `new RCTCameraPackage()` to `new RNCameraPackage()`.
 
 3. On `android/app/build.gradle`, change the line: `compile (project(':react-native-camera'))` to:
-
 ```gradle
 compile (project(':react-native-camera')) {
   exclude group: "com.google.android.gms"
@@ -42,7 +37,6 @@ compile ("com.google.android.gms:play-services-vision:10.2.0") {
 ```
 
 4. Add jitpack to android/build.gradle
-
 ```gradle
 allprojects {
   repositories {
@@ -66,11 +60,11 @@ On RNCamera you do not need to specify `captureMode`. The RNCamera, in any state
 ### `capture` to `takePictureAsync` or `recordAsync`
 
 Let's say you have a component with a RCTCamera taking a photo:
-
 ```jsx
 import Camera from 'react-native-camera';
 
 class TakePicture extends Component {
+
   takePicture = async () => {
     try {
       const data = await this.camera.capture();
@@ -107,11 +101,11 @@ class TakePicture extends Component {
 ```
 
 You should change this to:
-
 ```jsx
 import { RNCamera } from 'react-native-camera';
 
 class TakePicture extends Component {
+
   takePicture = async () => {
     try {
       const data = await this.camera.takePictureAsync();
